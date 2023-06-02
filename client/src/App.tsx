@@ -1,4 +1,16 @@
-import { Button, CssBaseline } from '@mui/material'
+import {
+    Button,
+    CssBaseline,
+    FormControl,
+    FormControlLabel,
+    FormHelperText,
+    FormLabel,
+    MenuItem,
+    Radio,
+    RadioGroup,
+    Select,
+    TextField,
+} from '@mui/material'
 import {
     Address,
     String,
@@ -9,7 +21,7 @@ import {
     Enum,
     Proof,
 } from '@radixdlt/radix-dapp-toolkit'
-import { Fragment, useState } from 'react'
+import { Fragment, useState, useEffect } from 'react'
 import {
     FungibleResourcesCollectionItem as NonFungibleResourcesCollectionItem,
     GatewayApiClient,
@@ -63,13 +75,14 @@ interface VoteStatus {
 * TODO:
 - Allow entering an organization name
 - Allow switching accounts to vote multiple times
+  - This actually requires signing with multiple accounts, because the admin
+    needs to sign off on the new member
 - Show past votes results
-- Allow choosing which way to vote
 - Add check for whether the user has already voted
-- Allow setting the name of the vote, and error if a vote with the given name
-  already exists
-- Allow setting the duration of the vote
+- Error if a vote with the given name already exists
 - Add timer to automatically refresh when vote ends 
+- Check that the user has the admin badge and disable corresponding actions if
+  they don't
 */
 function App() {
     const packageAddr =
@@ -83,7 +96,6 @@ function App() {
     const persona = usePersona()
     const requestData = useRequestData()
     const connected = useConnected()
-    const account = accounts[0]
     const sendTransaction = useSendTransaction()
 
     const [componentAddr, setComponentAddr] = useState<string | undefined>()
@@ -106,13 +118,33 @@ function App() {
     const voteInProgress = typeof voteEndTime !== 'undefined'
     const voteEndTimePassed = voteInProgress ? currentTime > voteEndTime : false
 
+    const [voteChoice, setVoteChoice] = useState<number | null>(null)
+    const [voteChoiceError, setVoteChoiceError] = useState<string | null>(null)
+
+    const [voteName, setVoteName] = useState<string>('')
+    const [voteDuration, setVoteDuration] = useState<number>(5)
+
+    const [accountId, setAccountId] = useState<number | undefined>()
+    useEffect(() => {
+        if (accounts.length > 0) {
+            setAccountId((v) =>
+                typeof v !== 'undefined' ? v : accounts[0].appearanceId
+            )
+        }
+    }, [accounts])
+    const account = accounts.find((v) => v.appearanceId === accountId)!
+
+    useEffect(() => {
+        if (typeof accountId !== 'undefined') updateIsMember()
+    }, [accountId])
+
     const orgName = 'Test Org'
     let instantiateManifest: string
     let becomeMemberManifest: string
     let newVoteManifest: string
     let voteManifest: string
     let endVoteManifest: string
-    if (connected) {
+    if (connected && account) {
         instantiateManifest = new ManifestBuilder()
             .callFunction(packageAddr, 'Vote', 'instantiate_vote', [
                 String(orgName),
@@ -123,7 +155,7 @@ function App() {
             .build()
             .toString()
     }
-    if (connected && componentAddr && adminBadge && memberBadge) {
+    if (connected && componentAddr && adminBadge && memberBadge && account) {
         becomeMemberManifest = new ManifestBuilder()
             .callMethod(account.address, 'create_proof_by_amount', [
                 Address(adminBadge),
@@ -141,8 +173,8 @@ function App() {
                 Decimal(1),
             ])
             .callMethod(componentAddr, 'new_vote', [
-                String('New Vote'),
-                I64('2'),
+                String(voteName),
+                I64(voteDuration.toString()),
             ])
             .build()
             .toString()
@@ -152,7 +184,10 @@ function App() {
                 Decimal(1),
             ])
             .popFromAuthZone('memberProof')
-            .callMethod(componentAddr, 'vote', [Enum(0), Proof('memberProof')])
+            .callMethod(componentAddr, 'vote', [
+                Enum(voteChoice!),
+                Proof('memberProof'),
+            ])
             .build()
             .toString()
         endVoteManifest = new ManifestBuilder()
@@ -177,7 +212,7 @@ function App() {
         console.log('Transaction result: ', result)
         if (result.isErr()) throw result.error
         const tx = result.value.transactionIntentHash
-        // '1fb3a7bee6691cf25a88fa66e8c2e969a75fe0d20b7b06d1d3a3498a77523566'
+            // '1fb3a7bee6691cf25a88fa66e8c2e969a75fe0d20b7b06d1d3a3498a77523566'
         const status = await transaction.getStatus(tx)
         console.log('Instantiate TransactionApi transaction/status:', status)
 
@@ -213,7 +248,10 @@ function App() {
         )
     }
 
-    async function becomeMember() {
+    /**
+     * @returns true if the current account is a member
+     */
+    async function updateIsMember() {
         const accountResources = await state.getEntityDetailsVaultAggregated(
             account.address
         )
@@ -225,9 +263,15 @@ function App() {
                 v.resource_address == memberBadge &&
                 v.vaults.items.find((vault) => Number(vault.total_count) > 0)
         )
-        if (typeof memberResource !== 'undefined') {
+        const _isMember = typeof memberResource !== 'undefined'
+        setIsMember(_isMember)
+        return _isMember
+    }
+
+    async function becomeMember() {
+        const _isMember = await updateIsMember()
+        if (_isMember) {
             alert('You are already a member!')
-            setIsMember(true)
             return
         }
         const result = await sendTransaction(becomeMemberManifest)
@@ -304,6 +348,10 @@ function App() {
             alert('Vote is already in progress!')
             return
         }
+        if (!voteName) {
+            alert('Vote must have a name')
+            return
+        }
         const result = await sendTransaction(newVoteManifest)
         console.log('Transaction result: ', result)
         if (result.isErr()) throw result.error
@@ -318,6 +366,11 @@ function App() {
             alert('No active vote!')
             return
         }
+        if (voteChoice === null) {
+            setVoteChoiceError('Please select a voting option')
+            return
+        }
+        setVoteChoiceError(null)
         const result = await sendTransaction(voteManifest)
         console.log('Transaction result: ', result)
         if (result.isErr()) throw result.error
@@ -337,136 +390,219 @@ function App() {
         setVoteStatus(undefined)
     }
 
+    const voteChoiceForm = (
+        <FormControl>
+            <FormLabel id='vote-choice-form'>Place your vote</FormLabel>
+            <RadioGroup
+                row
+                aria-labelledby='vote-choice-form'
+                name='radio-buttons-group'
+                value={voteChoice}
+                onChange={(event) => {
+                    setVoteChoice(
+                        Number((event.target as HTMLInputElement).value)
+                    )
+                }}
+            >
+                <FormControlLabel value={0} control={<Radio />} label='Yes' />
+                <FormControlLabel value={1} control={<Radio />} label='No' />
+            </RadioGroup>
+            <FormHelperText>{voteChoiceError}</FormHelperText>
+            <Button
+                variant='outlined'
+                sx={{ my: 1 }}
+                onClick={vote}
+                disabled={voteChoice === null}
+            >
+                Vote
+            </Button>
+        </FormControl>
+    )
+
+    const newVoteForm = (
+        <FormControl className='max-w-sm'>
+            <FormLabel id='vote-name-input'>Give a name to the vote</FormLabel>
+            <TextField
+                aria-labelledby='vote-name-input'
+                required
+                error={!voteName}
+                value={voteName}
+                onChange={(event) => {
+                    setVoteName((event.target as HTMLInputElement).value)
+                }}
+            />
+            <FormHelperText>
+                {voteName ? '' : 'Vote must have a name'}
+            </FormHelperText>
+            <FormLabel id='vote-duration-input'>
+                Set the vote duration in minutes (minimum 2)
+            </FormLabel>
+            <TextField
+                aria-labelledby='vote-duration-input'
+                type='number'
+                value={voteDuration}
+                onChange={(event) => {
+                    const val = Number((event.target as HTMLInputElement).value)
+                    if (val >= 2) setVoteDuration(val)
+                }}
+            />
+            <Button
+                sx={{ my: 1 }}
+                variant='outlined'
+                onClick={newVote}
+                disabled={!voteName}
+            >
+                Start vote
+            </Button>
+            <FormHelperText>
+                Note: you must use the account which instantiated the component
+                (the account with the admin badge)
+            </FormHelperText>
+        </FormControl>
+    )
+
+    const accountSelectForm = (
+        <FormControl>
+            <FormLabel id='account-select-input'>Select an account</FormLabel>
+            <Select
+                aria-labelledby='account-select-input'
+                value={accountId}
+                onChange={async (event) => {
+                    setAccountId(
+                        Number((event.target as HTMLInputElement).value)
+                    )
+                }}
+            >
+                {accounts.map((a) => (
+                    <MenuItem key={a.appearanceId} value={a.appearanceId}>
+                        {a.label} ({a.address})
+                    </MenuItem>
+                ))}
+            </Select>
+            <FormHelperText>
+                Use the Connect button to add more accounts.
+            </FormHelperText>
+        </FormControl>
+    )
+
+    const userDataDisplay = (
+        <>
+            <div className='mb-3'>
+                <h2>
+                    <b>Persona</b>: {persona?.label} <br />{' '}
+                    {persona.data?.map((v) => (
+                        <Fragment key={v.field}>
+                            {' '}
+                            <b>{v.field}</b>: {v.value}{' '}
+                        </Fragment>
+                    ))}
+                </h2>
+            </div>
+            <div className='mb-3'>
+                <b>Accounts:</b>
+                {accounts.map((account) => (
+                    <div key={account.appearanceId}>{account.label}</div>
+                ))}
+            </div>
+            <div className='mb-10'>
+                <Button variant='contained' onClick={requestUserDetails}>
+                    Request data
+                </Button>
+            </div>
+        </>
+    )
+
+    const voteInProgressDisplay = (
+        <>
+            <h3 className='text-xl font-medium mb-5'>Vote Status</h3>
+            <p>
+                <b>
+                    A vote "{voteStatus?.name}" has been created, it{' '}
+                    {voteEndTimePassed ? 'ended' : 'will end at'}{' '}
+                    {voteEndTime?.toString()}
+                    <br />
+                    {voteEndTimePassed &&
+                        'Click below to save the vote result to an NFT in the component, and allow starting a new vote'}
+                    <br />
+                    Yes votes: {voteStatus?.yesVotes}
+                    <br />
+                    No votes: {voteStatus?.noVotes}
+                </b>
+            </p>
+            {voteEndTimePassed ? (
+                <Button variant='outlined' onClick={endVote}>
+                    End the vote
+                </Button>
+            ) : (
+                <div className='my-5'>{voteChoiceForm}</div>
+            )}
+            <Button
+                variant='outlined'
+                onClick={async () => {
+                    await updateVoteStatus()
+                    setCurrentTime(new Date())
+                }}
+            >
+                Refresh
+            </Button>
+        </>
+    )
+
+    const voteInstantiatedDisplay = (
+        <>
+            <div className='mb-5'>
+                <p>
+                    <b>Vote Instantiated for organization {orgName}!</b>
+                </p>
+                <p>Vote component: {componentAddr}</p>
+                <p>Member badge: {memberBadge}</p>
+            </div>
+            {isMember ? (
+                <>{voteInProgress ? voteInProgressDisplay : newVoteForm}</>
+            ) : (
+                <Button variant='outlined' onClick={becomeMember}>
+                    Become voting member
+                </Button>
+            )}
+        </>
+    )
+
+    const walletConnectedDisplay = (
+        <>
+            <h2 className='text-2xl font-medium mb-5'>User Data</h2>
+            {userDataDisplay}
+            <h2 className='text-2xl font-medium mb-5'>Vote</h2>
+            <div className='my-5'>{accountSelectForm}</div>
+            {voteInstantiated ? (
+                voteInstantiatedDisplay
+            ) : (
+                <Button variant='outlined' onClick={instantiateVote}>
+                    Instantiate new vote component
+                </Button>
+            )}
+        </>
+    )
+
     return (
         <CssBaseline>
-            <div className='max-w-4xl mx-auto'>
+            <div className='max-w-4xl mx-auto mb-96'>
                 <div className='flex bg-white my-7 flex-row justify-between'>
                     <h1 className='text-3xl font-medium'>Radix Simple Vote</h1>
                     <radix-connect-button />
                 </div>
-                {connected ? (
-                    <Fragment>
-                        <h2 className='text-2xl font-medium mb-5'>User Data</h2>
-                        <div className='mb-3'>
-                            <h2>
-                                <b>Persona</b>: {persona?.label} <br />{' '}
-                                {persona.data?.map((v) => (
-                                    <Fragment>
-                                        {' '}
-                                        <b>{v.field}</b>: {v.value}{' '}
-                                    </Fragment>
-                                ))}
-                            </h2>
-                        </div>
-                        <div className='mb-3'>
-                            <b>Accounts:</b>
-                            {accounts.map((account) => (
-                                <div key={account.appearanceId}>
-                                    {account.label}
-                                </div>
-                            ))}
-                        </div>
-                        <div className='mb-10'>
-                            <Button
-                                variant='contained'
-                                onClick={requestUserDetails}
-                            >
-                                Request data
-                            </Button>
-                        </div>
-                        {voteInstantiated ? (
-                            <Fragment>
-                                <h2 className='text-2xl font-medium mb-5'>
-                                    Vote
-                                </h2>
-                                <div className='mb-5'>
-                                    <p>
-                                        <b>
-                                            Vote Instantiated for organization{' '}
-                                            {orgName}!
-                                        </b>
-                                    </p>
-                                    <p>Vote component: {componentAddr}</p>
-                                    <p>Member badge: {memberBadge}</p>
-                                </div>
-                                {isMember ? (
-                                    <Fragment>
-                                        {voteInProgress ? (
-                                            <Fragment>
-                                                <p>
-                                                    <b>
-                                                        A vote "
-                                                        {voteStatus?.name}" has
-                                                        been created, it{' '}
-                                                        {voteEndTimePassed
-                                                            ? 'ended'
-                                                            : 'will end at'}{' '}
-                                                        {voteEndTime.toString()}
-                                                        <br />
-                                                        Yes votes:{' '}
-                                                        {voteStatus?.yesVotes}
-                                                        <br />
-                                                        No votes:{' '}
-                                                        {voteStatus?.noVotes}
-                                                    </b>
-                                                </p>
-                                                {voteEndTimePassed ? (
-                                                    <Button
-                                                        variant='outlined'
-                                                        onClick={endVote}
-                                                    >
-                                                        End the vote
-                                                    </Button>
-                                                ) : (
-                                                    <Fragment>
-                                                        <Button
-                                                            variant='outlined'
-                                                            onClick={vote}
-                                                        >
-                                                            Vote
-                                                        </Button>
-                                                    </Fragment>
-                                                )}
-                                                <Button
-                                                    variant='outlined'
-                                                    onClick={async () => {
-                                                        await updateVoteStatus()
-                                                        setCurrentTime(
-                                                            new Date()
-                                                        )
-                                                    }}
-                                                >
-                                                    Refresh
-                                                </Button>
-                                            </Fragment>
-                                        ) : (
-                                            <Button
-                                                variant='outlined'
-                                                onClick={newVote}
-                                            >
-                                                Start a vote
-                                            </Button>
-                                        )}
-                                    </Fragment>
-                                ) : (
-                                    <Button
-                                        variant='outlined'
-                                        onClick={becomeMember}
-                                    >
-                                        Become voting member
-                                    </Button>
-                                )}
-                            </Fragment>
-                        ) : (
-                            <Button
-                                variant='outlined'
-                                onClick={instantiateVote}
-                            >
-                                Instantiate new vote component
-                            </Button>
-                        )}
-                    </Fragment>
-                ) : null}
+                <p className='mb-10'>
+                    If you haven't already,{' '}
+                    <a
+                        href='https://docs-babylon.radixdlt.com/main/getting-started-developers/wallet/wallet-and-connecter-installation.html'
+                        className='text-blue-500'
+                    >
+                        install the wallet and browser extension
+                    </a>{' '}
+                    to use this app, then click the connect button in the top
+                    right. Note that you may have to open and close the wallet
+                    app sometimes if transactions aren't showing up.
+                </p>
+                {connected ? walletConnectedDisplay : null}
             </div>
         </CssBaseline>
     )
