@@ -1,4 +1,5 @@
 import {
+    AppBar,
     Button,
     CssBaseline,
     FormControl,
@@ -10,6 +11,7 @@ import {
     RadioGroup,
     Select,
     TextField,
+    Toolbar,
 } from '@mui/material'
 import {
     Address,
@@ -71,18 +73,19 @@ interface VoteStatus {
     end: Date
 }
 
+type Account = {
+    address: string
+    label: string
+    appearanceId: number
+}
+
 /*
 * TODO:
 - Allow entering an organization name
-- Allow switching accounts to vote multiple times
-  - This actually requires signing with multiple accounts, because the admin
-    needs to sign off on the new member
 - Show past votes results
 - Add check for whether the user has already voted
 - Error if a vote with the given name already exists
 - Add timer to automatically refresh when vote ends 
-- Check that the user has the admin badge and disable corresponding actions if
-  they don't
 */
 function App() {
     const packageAddr =
@@ -92,7 +95,7 @@ function App() {
     })
     const { transaction, state } = gatewayApi
 
-    const accounts = useAccounts()
+    const accounts: Account[] = useAccounts()
     const persona = usePersona()
     const requestData = useRequestData()
     const connected = useConnected()
@@ -125,6 +128,7 @@ function App() {
     const [voteDuration, setVoteDuration] = useState<number>(5)
 
     const [accountId, setAccountId] = useState<number | undefined>()
+    const [adminAccount, setAdminAccount] = useState<Account | undefined>()
     useEffect(() => {
         if (accounts.length > 0) {
             setAccountId((v) =>
@@ -156,28 +160,30 @@ function App() {
             .toString()
     }
     if (connected && componentAddr && adminBadge && memberBadge && account) {
-        becomeMemberManifest = new ManifestBuilder()
-            .callMethod(account.address, 'create_proof_by_amount', [
-                Address(adminBadge),
-                Decimal(1),
-            ])
-            .callMethod(componentAddr, 'become_member', [])
-            .callMethod(account.address, 'deposit_batch', [
-                Expression('ENTIRE_WORKTOP'),
-            ])
-            .build()
-            .toString()
-        newVoteManifest = new ManifestBuilder()
-            .callMethod(account.address, 'create_proof_by_amount', [
-                Address(adminBadge),
-                Decimal(1),
-            ])
-            .callMethod(componentAddr, 'new_vote', [
-                String(voteName),
-                I64(voteDuration.toString()),
-            ])
-            .build()
-            .toString()
+        if (adminAccount) {
+            becomeMemberManifest = new ManifestBuilder()
+                .callMethod(adminAccount.address, 'create_proof_by_amount', [
+                    Address(adminBadge),
+                    Decimal(1),
+                ])
+                .callMethod(componentAddr, 'become_member', [])
+                .callMethod(account.address, 'deposit_batch', [
+                    Expression('ENTIRE_WORKTOP'),
+                ])
+                .build()
+                .toString()
+            newVoteManifest = new ManifestBuilder()
+                .callMethod(adminAccount.address, 'create_proof_by_amount', [
+                    Address(adminBadge),
+                    Decimal(1),
+                ])
+                .callMethod(componentAddr, 'new_vote', [
+                    String(voteName),
+                    I64(voteDuration.toString()),
+                ])
+                .build()
+                .toString()
+        }
         voteManifest = new ManifestBuilder()
             .callMethod(account.address, 'create_proof_by_amount', [
                 Address(memberBadge),
@@ -212,7 +218,7 @@ function App() {
         console.log('Transaction result: ', result)
         if (result.isErr()) throw result.error
         const tx = result.value.transactionIntentHash
-            // '1fb3a7bee6691cf25a88fa66e8c2e969a75fe0d20b7b06d1d3a3498a77523566'
+        // '1fb3a7bee6691cf25a88fa66e8c2e969a75fe0d20b7b06d1d3a3498a77523566'
         const status = await transaction.getStatus(tx)
         console.log('Instantiate TransactionApi transaction/status:', status)
 
@@ -246,6 +252,7 @@ function App() {
         setVoteResultsAddr(
             entities.find(metadataNameIs(`${orgName} Vote Result`))?.address
         )
+        setAdminAccount(account)
     }
 
     /**
@@ -255,7 +262,7 @@ function App() {
         const accountResources = await state.getEntityDetailsVaultAggregated(
             account.address
         )
-        console.log(accountResources)
+        console.log('Account resources:', accountResources)
         const non_fungible_resources = accountResources.non_fungible_resources
             .items as unknown as NonFungibleResource[]
         const memberResource = non_fungible_resources.find(
@@ -362,10 +369,11 @@ function App() {
     }
 
     async function vote() {
-        if (!voteInProgress || voteEndTimePassed) {
+        if (!voteInProgress || new Date() >= voteEndTime) {
             alert('No active vote!')
             return
         }
+        setCurrentTime(new Date())
         if (voteChoice === null) {
             setVoteChoiceError('Please select a voting option')
             return
@@ -409,7 +417,7 @@ function App() {
             </RadioGroup>
             <FormHelperText>{voteChoiceError}</FormHelperText>
             <Button
-                variant='outlined'
+                variant='contained'
                 sx={{ my: 1 }}
                 onClick={vote}
                 disabled={voteChoice === null}
@@ -448,7 +456,7 @@ function App() {
             />
             <Button
                 sx={{ my: 1 }}
-                variant='outlined'
+                variant='contained'
                 onClick={newVote}
                 disabled={!voteName}
             >
@@ -461,7 +469,7 @@ function App() {
         </FormControl>
     )
 
-    const accountSelectForm = (
+    const accountSelectForm = typeof accountId !== 'undefined' && (
         <FormControl>
             <FormLabel id='account-select-input'>Select an account</FormLabel>
             <Select
@@ -480,13 +488,14 @@ function App() {
                 ))}
             </Select>
             <FormHelperText>
-                Use the Connect button to add more accounts.
+                All actions will use this account. Use the Connect button in the
+                top right to add more accounts.
             </FormHelperText>
         </FormControl>
     )
 
     const userDataDisplay = (
-        <>
+        <div className='flex justify-between mb-5'>
             <div className='mb-3'>
                 <h2>
                     <b>Persona</b>: {persona?.label} <br />{' '}
@@ -504,12 +513,12 @@ function App() {
                     <div key={account.appearanceId}>{account.label}</div>
                 ))}
             </div>
-            <div className='mb-10'>
-                <Button variant='contained' onClick={requestUserDetails}>
+            <div className=''>
+                <Button variant='outlined' onClick={requestUserDetails}>
                     Request data
                 </Button>
             </div>
-        </>
+        </div>
     )
 
     const voteInProgressDisplay = (
@@ -530,14 +539,14 @@ function App() {
                 </b>
             </p>
             {voteEndTimePassed ? (
-                <Button variant='outlined' onClick={endVote}>
+                <Button variant='contained' onClick={endVote}>
                     End the vote
                 </Button>
             ) : (
                 <div className='my-5'>{voteChoiceForm}</div>
             )}
             <Button
-                variant='outlined'
+                variant='contained'
                 onClick={async () => {
                     await updateVoteStatus()
                     setCurrentTime(new Date())
@@ -560,7 +569,7 @@ function App() {
             {isMember ? (
                 <>{voteInProgress ? voteInProgressDisplay : newVoteForm}</>
             ) : (
-                <Button variant='outlined' onClick={becomeMember}>
+                <Button variant='contained' onClick={becomeMember}>
                     Become voting member
                 </Button>
             )}
@@ -576,7 +585,7 @@ function App() {
             {voteInstantiated ? (
                 voteInstantiatedDisplay
             ) : (
-                <Button variant='outlined' onClick={instantiateVote}>
+                <Button variant='contained' onClick={instantiateVote}>
                     Instantiate new vote component
                 </Button>
             )}
@@ -585,11 +594,18 @@ function App() {
 
     return (
         <CssBaseline>
-            <div className='max-w-4xl mx-auto mb-96'>
-                <div className='flex bg-white my-7 flex-row justify-between'>
-                    <h1 className='text-3xl font-medium'>Radix Simple Vote</h1>
+            <AppBar className='mb-5 w-screen' position='sticky'>
+                <Toolbar
+                    className='w-full max-w-4xl mx-auto'
+                    sx={{ p: { sm: 0 } }}
+                >
+                    <h1 className='text-3xl font-medium grow'>
+                        Radix Simple Vote
+                    </h1>
                     <radix-connect-button />
-                </div>
+                </Toolbar>
+            </AppBar>
+            <div className='max-w-4xl mx-auto mb-96'>
                 <p className='mb-10'>
                     If you haven't already,{' '}
                     <a
