@@ -1,6 +1,6 @@
 # Radix Simple Vote 
 
-A Radix DApp for representing a simple voting process.
+A Radix DApp for representing a simple voting process, with a frontend and test suite.
 
 This repo contains:
 
