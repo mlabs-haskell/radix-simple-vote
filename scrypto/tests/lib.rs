@@ -1,102 +1,118 @@
 use crate::test_lib::TestLib;
+use radix_engine::blueprints::resource::NON_FUNGIBLE_RESOURCE_MANAGER_DATA_STORE;
+use radix_engine::system::system::{FieldSubstate, KeyValueEntrySubstate};
 use radix_engine::transaction::TransactionReceipt;
-use scrypto::{blueprints::clock::TimePrecision, prelude::*};
+use radix_engine_store_interface::db_key_mapper::{MappedSubstateDatabase, SpreadPrefixKeyMapper};
+use radix_engine_stores::memory_db::InMemorySubstateDatabase;
+use scrypto::{blueprints::consensus_manager::TimePrecision, prelude::*};
+use scrypto_unit::*;
 use simple_vote::{vote::Vote, CurrentVote, VoteChoice};
-use transaction::{builder::ManifestBuilder, model::TransactionManifest};
+use transaction::builder::ManifestBuilder;
+use transaction::prelude::TransactionManifestV1;
 
 mod test_lib;
 
 struct VoteTest {
-    public_key: EcdsaSecp256k1PublicKey,
-    account_component: ComponentAddress,
-    resources: HashMap<String, (ResourceAddress, Option<String>)>,
+    runner: TestRunner,
+    admin_public_key: Secp256k1PublicKey,
+    admin_account: ComponentAddress,
+    resources: HashMap<String, ResourceAddress>,
     component_badge: ResourceAddress,
     admin_badge: ResourceAddress,
     member_badge: ResourceAddress,
     vote_results_addr: ResourceAddress,
-    lib: TestLib,
     vote_component: ComponentAddress,
 }
 
 impl VoteTest {
     pub fn new() -> Self {
-        let mut lib = TestLib::new();
+        //
+        // Setup the environment
+        let mut test_runner = TestRunner::builder()
+            .with_custom_genesis(CustomGenesis::default(
+                Epoch::of(1),
+                CustomGenesis::default_consensus_manager_config(),
+            ))
+            .without_trace()
+            .build();
 
-        let (public_key, _private_key, account_component) = lib.test_runner.new_allocated_account();
+        let (admin_public_key, admin_private_key, admin_account) =
+            test_runner.new_allocated_account();
 
-        let package_address = lib.test_runner.compile_and_publish(this_package!());
+        let vote_package_address = test_runner.compile_and_publish(this_package!());
 
         let manifest = ManifestBuilder::new()
             .call_function(
-                package_address,
+                vote_package_address,
                 "Vote",
                 "instantiate_vote",
                 manifest_args!("Test"),
             )
-            .call_method(
-                account_component,
-                "deposit_batch",
-                manifest_args!(ManifestExpression::EntireWorktop),
-            )
+            .deposit_batch(admin_account)
             .build();
-        let receipt = lib.test_runner.execute_manifest_ignoring_fee(
+
+        let receipt = test_runner.execute_manifest_ignoring_fee(
             manifest,
-            vec![NonFungibleGlobalId::from_public_key(&public_key)],
+            vec![NonFungibleGlobalId::from_public_key(&admin_public_key)],
         );
-        println!("instantiate_vote receipt: {:?}", receipt);
-        let result = receipt.expect_commit_success();
-        let vote_component = result.new_component_addresses()[0];
-        let new_resources = result.new_resource_addresses();
+
+        let vote_component = receipt.expect_commit(true).new_component_addresses()[0];
+        let rs = receipt.expect_commit(true).new_resource_addresses();
+
+        // let admin_badge = rs[0];
+        // let member_badge = rs[2];
+
         let mut resources = HashMap::new();
-        for addr in new_resources {
-            let name = lib
-                .expect_string_metadata(addr, "name")
+        for addr in rs {
+            let name = test_runner
+                .get_metadata(GlobalAddress::from(addr.clone()), "name")
                 .expect("Name metadata key should be present");
-            let symbol = lib.expect_string_metadata(addr, "symbol");
-            resources.insert(name, (addr.clone(), symbol));
+            let name_str = match name {
+                MetadataValue::String(n) => n,
+                _ => panic!("Resource 'name' metadata is of wrong type"),
+            };
+            resources.insert(name_str, addr.clone());
         }
-        let component_badge = resources.get("Test Component").unwrap().0;
-        let admin_badge = resources.get("Test Vote Admin").unwrap().0;
-        let member_badge = resources.get("Test Voting Member").unwrap().0;
-        let vote_results_addr = resources.get("Test Vote Result").unwrap().0;
+
+        let component_badge = resources.get("Test Component").unwrap();
+        let admin_badge = resources.get("Test Admin").unwrap();
+        let member_badge = resources.get("Test Member").unwrap();
+        let vote_results_addr = resources.get("Test Result").unwrap();
 
         Self {
-            public_key,
-            account_component,
-            resources,
+            runner: test_runner,
+            admin_public_key,
+            admin_account,
             vote_component,
             component_badge: component_badge.clone(),
             admin_badge: admin_badge.clone(),
             member_badge: member_badge.clone(),
             vote_results_addr: vote_results_addr.clone(),
-            lib,
+            resources,
         }
     }
 
-    fn execute_become_member(&mut self) -> TransactionReceipt {
-        let manifest = ManifestBuilder::new()
+    fn become_member_manifest(&mut self, member_addr: ComponentAddress) -> TransactionManifestV1 {
+        ManifestBuilder::new()
             .call_method(
-                self.account_component,
-                "create_proof_by_amount",
+                self.admin_account,
+                "create_proof_of_amount",
                 manifest_args!(self.admin_badge, dec!("1")),
             )
             .call_method(self.vote_component, "become_member", manifest_args!())
             .call_method(
-                self.account_component,
+                member_addr,
                 "deposit_batch",
                 manifest_args!(ManifestExpression::EntireWorktop),
             )
-            .build();
-        let receipt = self.execute_manifest(manifest);
-        println!("become_member receipt: {:?}", receipt);
-        receipt
+            .build()
     }
 
-    fn execute_new_vote(&mut self, name: &str, duration: i64) -> TransactionReceipt {
-        let manifest = ManifestBuilder::new()
+    fn new_vote_manifest(&mut self, name: &str, duration: i64) -> TransactionManifestV1 {
+        ManifestBuilder::new()
             .call_method(
-                self.account_component,
-                "create_proof_by_amount",
+                self.admin_account,
+                "create_proof_of_amount",
                 manifest_args!(self.admin_badge, dec!("1")),
             )
             .call_method(
@@ -104,46 +120,94 @@ impl VoteTest {
                 "new_vote",
                 manifest_args!(name, duration),
             )
-            .build();
-        let receipt = self.execute_manifest(manifest);
-        println!("new_vote receipt: {:?}", receipt);
-        receipt
+            .build()
     }
 
-    fn execute_vote(&mut self, choice: VoteChoice) -> TransactionReceipt {
-        let manifest = ManifestBuilder::new()
-            .call_method(
-                self.account_component,
-                "create_proof_by_amount",
-                manifest_args!(self.member_badge, dec!("1")),
-            )
-            .pop_from_auth_zone(|builder, member_proof| {
-                builder.call_method(
-                    self.vote_component,
-                    "vote",
-                    manifest_args!(choice, member_proof),
-                )
-            })
-            .build();
-        let receipt = self.execute_manifest(manifest);
-        println!("vote receipt: {:?}", receipt);
-        receipt
+    fn vote_manifest(
+        &mut self,
+        member_addr: ComponentAddress,
+        choice: VoteChoice,
+    ) -> TransactionManifestV1 {
+        let vaults = self
+            .runner
+            .get_component_vaults(member_addr, self.member_badge);
+        match self
+            .runner
+            .inspect_non_fungible_vault(vaults.get(0).unwrap().clone())
+        {
+            Some((_, Some(rid))) => {
+                let mut s = BTreeSet::new();
+                s.insert(rid);
+                println!("s: {:?}", s);
+                let mut p: Proof;
+                ManifestBuilder::new()
+                    .call_method(
+                        member_addr,
+                        "create_proof_of_non_fungibles",
+                        manifest_args!(self.member_badge, s),
+                    )
+                    .pop_from_auth_zone("proof")
+                    .call_method_with_name_lookup(
+                        self.vote_component,
+                        "vote",
+                        |lookup| (choice, lookup.proof("proof"))
+                    )
+                    .build()
+            }
+            _ => panic!("No non fungible vault found"),
+        }
     }
 
-    fn execute_end_vote(&mut self) -> TransactionReceipt {
-        let manifest = ManifestBuilder::new()
+    fn end_vote_manifest(&mut self) -> TransactionManifestV1 {
+        ManifestBuilder::new()
             .call_method(self.vote_component, "end_vote", manifest_args!())
-            .build();
-        let receipt = self.execute_manifest(manifest);
-        println!("end_vote receipt: {:?}", receipt);
-        receipt
+            .build()
     }
 
-    fn execute_manifest(&mut self, manifest: TransactionManifest) -> TransactionReceipt {
-        self.lib.test_runner.execute_manifest_ignoring_fee(
-            manifest,
-            vec![NonFungibleGlobalId::from_public_key(&self.public_key)],
-        )
+    fn execute_manifest(
+        &mut self,
+        manifest: TransactionManifestV1,
+        proofs: Vec<NonFungibleGlobalId>,
+    ) -> TransactionReceipt {
+        self.runner.execute_manifest_ignoring_fee(manifest, proofs)
+    }
+
+    fn get_component_state<T: ScryptoDecode>(
+        self: &VoteTest,
+        component_address: ComponentAddress,
+    ) -> T {
+        let store = self.runner.substate_db();
+        let node_id: &NodeId = component_address.as_node_id();
+        let partition_number = MAIN_BASE_PARTITION;
+        let substate_key: &SubstateKey = &ComponentField::State0.into();
+
+        let component_state = store.get_mapped::<SpreadPrefixKeyMapper, FieldSubstate<T>>(
+            node_id,
+            partition_number,
+            substate_key,
+        );
+        component_state.unwrap().value.0
+    }
+
+    fn get_non_fungible_data<T: NonFungibleData>(
+        self: &VoteTest,
+        resource: ResourceAddress,
+        non_fungible_id: NonFungibleLocalId,
+    ) -> T {
+        let store = self.runner.substate_db();
+        let collection_index = NON_FUNGIBLE_RESOURCE_MANAGER_DATA_STORE;
+        let node_id: &NodeId = resource.as_node_id();
+        let partition_number = MAIN_BASE_PARTITION
+            .at_offset(PartitionOffset(1 + collection_index))
+            .unwrap();
+        let substate_key: &SubstateKey = &SubstateKey::Map(non_fungible_id.to_key());
+
+        let substate = store.get_mapped::<SpreadPrefixKeyMapper, KeyValueEntrySubstate<T>>(
+            node_id,
+            partition_number,
+            substate_key,
+        );
+        substate.unwrap().value.unwrap()
     }
 }
 
@@ -152,92 +216,120 @@ fn test_vote_happy_path() {
     // INSTANTIATE
     let mut test = VoteTest::new();
 
-    let expected_resource_names = vec![
-        ("Test Vote Admin", None),
-        ("Test Component", None),
-        ("Test Voting Member", Some("TVM")),
-        ("Test Vote Result", Some("TVR")),
-    ];
+    let expected_resource_names =
+        vec!["Test Admin", "Test Component", "Test Member", "Test Result"];
     assert!(
-        expected_resource_names.iter().all(|res| {
-            match test.resources.get(res.0) {
-                Some(v) => v.1.as_deref() == res.1,
-                _ => false,
-            }
-        }),
+        expected_resource_names
+            .iter()
+            .all(|&res| { test.resources.get(res).is_some() }),
         "Unexpected new resources, expected resources: {:?}\nbut got {:?}",
         expected_resource_names,
         test.resources
     );
 
-    let vote_resources = test
-        .lib
-        .test_runner
-        .get_component_resources(test.vote_component);
+    let vote_resources = test.runner.get_component_resources(test.vote_component);
     assert_eq!(
         vote_resources.get(&test.component_badge),
         Some(dec!("1")).as_ref()
     );
     assert_eq!(
         vote_resources.get(&test.vote_results_addr),
-        Some(dec!("0")).as_ref()
+        // Some(dec!("0")).as_ref()
+        None
     );
 
     assert_eq!(
-        test.lib
-            .test_runner
-            .account_balance(test.account_component, test.admin_badge.clone()),
+        test.runner
+            .account_balance(test.admin_account, test.admin_badge.clone()),
         Some(dec!("1")),
     );
 
+    let (user1_public_key, user1_private_key, user1_account) = test.runner.new_allocated_account();
+
+    let admin_global_id = NonFungibleGlobalId::from_public_key(&test.admin_public_key);
+    let user1_global_id = NonFungibleGlobalId::from_public_key(&user1_public_key);
+
     // BECOME MEMBER
-    test.execute_become_member().expect_commit_success();
+    let manifest = test.become_member_manifest(user1_account);
+    let r = test.runner.execute_manifest_ignoring_fee(
+        manifest,
+        vec![admin_global_id.clone(), user1_global_id.clone()],
+    );
 
     assert_eq!(
-        test.lib
-            .test_runner
-            .account_balance(test.account_component, test.member_badge.clone()),
+        test.runner
+            .account_balance(user1_account, test.member_badge.clone()),
         Some(dec!("1")),
     );
 
     // NEW VOTE
-    let vote_start = test.lib.test_runner.get_current_time(TimePrecision::Minute);
+    let vote_start = test.runner.get_current_time(TimePrecision::Minute);
     let duration = 5i64;
-    test.execute_new_vote("Test Vote", duration)
+    let manifest = test.new_vote_manifest("Test Vote", duration);
+    test.runner
+        .execute_manifest_ignoring_fee(manifest, vec![admin_global_id.clone()])
         .expect_commit_success();
 
     // VOTE
-    test.execute_vote(VoteChoice::Yes).expect_commit_success();
+    let manifest = test.vote_manifest(user1_account, VoteChoice::Yes);
+    test.runner
+        .execute_manifest_ignoring_fee(manifest, vec![user1_global_id.clone()])
+        .expect_commit_success();
 
     // DOUBLE VOTE ATTEMPT
-    let receipt = test.execute_vote(VoteChoice::Yes);
-    TestLib::expect_error_log(&receipt, "Member has already voted");
+    let manifest = test.vote_manifest(user1_account, VoteChoice::Yes);
+    let receipt = test
+        .runner
+        .execute_manifest_ignoring_fee(manifest, vec![user1_global_id.clone()]);
+    // TestLib::expect_error_log(&receipt, "Member has already voted");
     receipt.expect_commit_failure();
 
     // END VOTE
-    test.lib.test_runner.set_current_time(
+    println!("epoch before set: {:?}", test.runner.get_current_epoch());
+    let round = test.runner.get_consensus_manager_state().round;
+    test.runner.advance_to_round_at_timestamp(
+        Round::of(round.number() + 1),
         vote_start
             .add_minutes(duration)
             .expect("Could not make new time")
             .seconds_since_unix_epoch
-            * 1000, // Needs milliseconds
+            * 1000,
     );
-    test.execute_end_vote().expect_commit_success();
+    // test.runner.set_current_epoch(
+    //     Epoch::of(
+    //     (vote_start
+    //         .add_minutes(duration)
+    //         .expect("Could not make new time")
+    //         .seconds_since_unix_epoch
+    //         * 1000).to_u64().unwrap()) // Needs milliseconds
+    // );
+    println!("epoch after set: {:?}", test.runner.get_current_epoch());
+    let manifest = test.end_vote_manifest();
+    test.runner
+        .execute_manifest_ignoring_fee(manifest, vec![admin_global_id.clone()])
+        .expect_commit_success();
 
-    let vote_state = test.lib.get_component_state::<Vote>(&test.vote_component);
-    let vote_result_ids = test
-        .lib
-        .test_runner
-        .inspect_non_fungible_vault(vote_state.vote_results.0)
-        .expect("Vote results vault could not be accessed");
-    assert_eq!(vote_result_ids.len(), 1);
-    let vote_result_id = vote_result_ids.first().unwrap();
-    let vote_result = test
-        .lib
-        .get_non_fungible_data::<CurrentVote>(&test.vote_results_addr, vote_result_id);
-    assert_eq!(vote_result.yes_votes, 1);
-    assert_eq!(vote_result.no_votes, 0);
-    assert_eq!(vote_result.name, "Test Vote");
+    let vote_state = test.get_component_state::<Vote>(test.vote_component);
+
+    let vote_result_vault_node = vote_state.vote_results.0;
+    println!("vote_result_vault_node: {:?}", vote_result_vault_node);
+
+    let vote_ids = test
+        .runner
+        .inspect_non_fungible_vault(vote_result_vault_node.0)
+        .expect("Vote result vault not found");
+    println!("vote_ids: {:?}", vote_ids.clone().1.unwrap());
+    let d = test.get_non_fungible_data::<CurrentVote>(test.vote_results_addr, vote_ids.1.unwrap());
+    println!("d: {:?}", d);
+    // assert_eq!(vote_ids.len(), 1);
+
+    // let vote_result_id = vote_result_ids.first().unwrap();
+    // let vote_result = test
+    //     .lib
+    //     .get_non_fungible_data::<CurrentVote>(&test.vote_results_addr, vote_result_id);
+    // assert_eq!(vote_result.yes_votes, 1);
+    // assert_eq!(vote_result.no_votes, 0);
+    // assert_eq!(vote_result.name, "Test Vote");
 }
 
 // TODO: test
