@@ -7,8 +7,8 @@
     "@emotion/styled": "^11.11.0",
     "@mui/base": "latest",
     "@mui/material": "^5.13.3",
-    "@radixdlt/babylon-gateway-api-sdk": "^1.0.0-rc.1.4",
-    "@radixdlt/radix-dapp-toolkit": "^0.2.0",
+    "@radixdlt/babylon-gateway-api-sdk": "^1.0.0-rc.2.6",
+    "@radixdlt/radix-dapp-toolkit": "^0.5.1",
     "@testing-library/jest-dom": "latest",
     "@testing-library/react": "latest",
     "@testing-library/user-event": "latest",
@@ -17,11 +17,11 @@
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "autoprefixer": "latest",
+    "neverthrow": "^6.0.0",
     "postcss": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "react-scripts": "latest",
-    "typescript": "latest"
+    "react-scripts": "latest"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -42,6 +42,7 @@
     ]
   },
   "devDependencies": {
-    "netlify-cli": "^15.2.0"
+    "netlify-cli": "^15.2.0",
+    "typescript": "^4.9.5"
   }
 }

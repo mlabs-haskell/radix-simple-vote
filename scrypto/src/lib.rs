@@ -26,11 +26,11 @@ mod vote {
     enable_method_auth! {
         roles {
             admin => updatable_by: [OWNER];
+            member => updatable_by: [admin];
         },
         methods {
             become_member => restrict_to: [admin];
             new_vote => restrict_to: [admin];
-            // TODO add member role
             vote => PUBLIC;
             end_vote => PUBLIC;
         }
@@ -107,6 +107,8 @@ mod vote {
                     ))
                     .create_with_no_initial_supply();
 
+            let require_member = rule!(require(member_badge.address()));
+
             let vote_badge: ResourceManager =
                 ResourceBuilder::new_ruid_non_fungible::<CurrentVote>(OwnerRole::None)
                     .metadata(metadata!(
@@ -133,6 +135,7 @@ mod vote {
             .prepare_to_globalize(OwnerRole::None)
             .roles(roles!(
                 admin => require_admin.clone();
+                member => require_member.clone();
             ))
             .metadata(metadata!(
                 init {
@@ -170,6 +173,8 @@ mod vote {
         }
 
         pub fn vote(&mut self, choice: VoteChoice, member_proof: Proof) {
+
+            debug!("{:?}", member_proof);
             let current_vote = self.current_vote.as_mut().expect("No vote in progress");
             assert!(
                 Clock::current_time_is_strictly_before(current_vote.end, TimePrecision::Minute),

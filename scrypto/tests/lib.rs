@@ -26,7 +26,7 @@ struct VoteTest {
 
 impl VoteTest {
     pub fn new() -> Self {
-        //
+
         // Setup the environment
         let mut test_runner = TestRunner::builder()
             .with_custom_genesis(CustomGenesis::default(
@@ -58,9 +58,6 @@ impl VoteTest {
 
         let vote_component = receipt.expect_commit(true).new_component_addresses()[0];
         let rs = receipt.expect_commit(true).new_resource_addresses();
-
-        // let admin_badge = rs[0];
-        // let member_badge = rs[2];
 
         let mut resources = HashMap::new();
         for addr in rs {
@@ -147,6 +144,8 @@ impl VoteTest {
                         manifest_args!(self.member_badge, s),
                     )
                     .pop_from_auth_zone("proof")
+                    .clone_proof("proof", "proof1")
+                    .push_to_auth_zone("proof1")
                     .call_method_with_name_lookup(
                         self.vote_component,
                         "vote",
@@ -164,13 +163,6 @@ impl VoteTest {
             .build()
     }
 
-    fn execute_manifest(
-        &mut self,
-        manifest: TransactionManifestV1,
-        proofs: Vec<NonFungibleGlobalId>,
-    ) -> TransactionReceipt {
-        self.runner.execute_manifest_ignoring_fee(manifest, proofs)
-    }
 
     fn get_component_state<T: ScryptoDecode>(
         self: &VoteTest,
@@ -272,9 +264,12 @@ fn test_vote_happy_path() {
 
     // VOTE
     let manifest = test.vote_manifest(user1_account, VoteChoice::Yes);
-    test.runner
-        .execute_manifest_ignoring_fee(manifest, vec![user1_global_id.clone()])
-        .expect_commit_success();
+    let receipt = test.runner
+        .execute_manifest_ignoring_fee(manifest, vec![user1_global_id.clone()]);
+        // .expect_commit_success();
+
+    let cr = receipt.expect_commit_success();
+    // println!("receipt: {:?}", cr);
 
     // DOUBLE VOTE ATTEMPT
     let manifest = test.vote_manifest(user1_account, VoteChoice::Yes);
