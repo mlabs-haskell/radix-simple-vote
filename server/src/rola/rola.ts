@@ -19,7 +19,7 @@ export const RolaFactory =
     dAppDefinitionAddress: string;
     networkId: number;
   }) =>
-  (signedChallenge: SignedChallenge): ResultAsync<any, RolaError> => {
+  (signedChallenge: SignedChallenge): ResultAsync<string, RolaError> => {
     const result = createPublicKeyHash(signedChallenge.proof.publicKey);
 
     if (result.isErr()) return errAsync({ reason: "couldNotHashPublicKey" });
@@ -68,7 +68,7 @@ export const RolaFactory =
 
           return ownerKeysMatchesProvidedPublicKey ||
             derivedAddressMatchesPublicKey
-            ? ok(undefined)
+            ? ok(derivedAddress)
             : err({ reason: "invalidPublicKey" });
         },
       );

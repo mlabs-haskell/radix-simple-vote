@@ -98,6 +98,59 @@ const getTransactionResult = async (
     },
   });
 
+// not working. errors out due to missing owner role. unsure how to fix.
+const createFungibleResource = async (
+  prvKey: PrivateKey.IPrivateKey,
+  txApi: TransactionApi,
+  statusApi: StatusApi,
+  tkName: string,
+  tkSymbol: string,
+  receiver: string,
+) => {
+  const manifest = new ManifestBuilder()
+    .createFungibleResourceWithInitialSupply(
+      new ManifestAstValue.Bool(true),  
+      new ManifestAstValue.U8(1),
+      new ManifestAstValue.Map(
+        ManifestAstValue.Kind.String,
+        ManifestAstValue.Kind.String,
+        [
+          [new ManifestAstValue.String("name"), new ManifestAstValue.String(tkName)],
+          [new ManifestAstValue.String("symbol"), new ManifestAstValue.String(tkSymbol)],
+        ] 
+      ),
+      new ManifestAstValue.Map(
+        ManifestAstValue.Kind.Enum,
+        ManifestAstValue.Kind.Tuple,
+        []
+      ),
+      new ManifestAstValue.Decimal(50)
+    )
+    .callMethod(receiver, "try_deposit_batch_or_abort", [
+      ManifestAstValue.Expression.entireWorktop()
+    ])
+    .build()
+  let currentEpoch = await getCurrentEpoch(statusApi);
+  let txHeader = new TransactionHeader(
+    NetworkId.Ansharnet,
+    currentEpoch,
+    currentEpoch + 50,
+    generateRandomNonce(),
+    prvKey.publicKey(),
+    false,
+    0,
+  );
+  let tx = await TransactionBuilder.new().then((builder) =>
+    builder.header(txHeader).manifest(manifest).notarize(prvKey),
+  );
+  // console.log(tx.toString())
+  // process.exit(0)
+  let txCompiled = await tx.compile();
+  console.log(tx.toString())
+  await submitTransaction(txApi, txCompiled);
+  return await tx.transactionId();
+}
+
 const submitFaucetTransaction = async (
   prvKey: PrivateKey.IPrivateKey,
   txApi: TransactionApi,
@@ -144,11 +197,6 @@ const getAddress = async (prvKey: PrivateKey.IPrivateKey) =>
 const printAddresses = async () =>
   console.log(
     await (() => Promise.all(Object.entries(actors).map(([key, value]) => getAddress(value).then(a => [key, a])))
-    //   ({
-    //   admin: await getAddress(actors.admin),
-    //   user1: await getAddress(actors.user1),
-    //   user2: await getAddress(actors.user2),
-    // })
     )(),
   );
 
@@ -310,10 +358,10 @@ const main = async () => {
   const streamApi = new StreamApi(apiCfg);
   const stateApi = new StateApi(apiCfg);
 
-  const coreClient = await CoreApiClient.initialize({
-    basePath: "http://127.0.0.1:3333/core",
-    logicalNetworkName: "ansharnet",
-  });
+  // const coreClient = await CoreApiClient.initialize({
+  //   basePath: "http://127.0.0.1:3333/core",
+  //   logicalNetworkName: "ansharnet",
+  // });
 
   printAddresses();
 
@@ -328,18 +376,20 @@ const main = async () => {
 
   // bip()
 
-  const r = await stateApi.stateEntityDetails({
-    stateEntityDetailsRequest: {
-      addresses: [
-        // "resource_tdx_d_1n2p5gq2f7g00ag2ndug0983s2xy7kq8esdvumf3mvelt5kn7jehr8v",
-        "account_tdx_d_12xs46zcft32snejqeh5q3kudppna7vx4eu6rjqdnk70sazgrx3nppp",
-        (await getAddress(actors.user1)).value,
-        (await getAddress(actors.user2)).value,
-        (await getAddress(actors.admin)).value,
-      ]
-    }
-    
-  })
+  // const r = await stateApi.stateEntityDetails({
+  //   stateEntityDetailsRequest: {
+  //     addresses: [
+  //       // "resource_tdx_d_1n2p5gq2f7g00ag2ndug0983s2xy7kq8esdvumf3mvelt5kn7jehr8v",
+  //       "account_tdx_d_12xs46zcft32snejqeh5q3kudppna7vx4eu6rjqdnk70sazgrx3nppp",
+  //       (await getAddress(actors.user1)).value,
+  //       (await getAddress(actors.user2)).value,
+  //       (await getAddress(actors.admin)).value,
+  //     ]
+  //   }
+  // })
+
+  const cr = await createFungibleResource(actors.admin, txApi, statusApi, "SnapshotGov1", "SG1", "account_tdx_d_12yy5c6um2nlhnkp504ul3dq62ecv29g3tmpzj2l56w7lfdhcgwqf35")
+  // console.log(cr)
 
   // const r = await stateApi.entityNonFungiblesPage({
   //   stateEntityNonFungiblesPageRequest: {
@@ -362,7 +412,7 @@ const main = async () => {
   //   }
   // })
 
-  writeFileSync("response.json", JSON.stringify(r, null, 2));
+  // writeFileSync("response.json", JSON.stringify(r, null, 2));
 
   // let txId = await publishVote(actors.admin, txApi, statusApi, voteCode, voteSchema);
   // let txId = await submitInitVote(actors.admin, txApi, statusApi, votePackageAddr);
@@ -395,8 +445,6 @@ const main = async () => {
 //   .build();
 //
 // console.log(manifest.toString());
-
-// main();
 
 const findPath = async () => {
   const coinIds = ["0","1","1022"]
@@ -439,5 +487,5 @@ const findPath = async () => {
   // }
 }
 
-findPath()
-// main()
+// findPath()
+main()

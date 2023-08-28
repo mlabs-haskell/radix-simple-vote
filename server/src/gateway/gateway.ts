@@ -13,7 +13,19 @@ export const GatewayService = (basePath: string) => {
       (e: unknown) => e as Error,
     );
 
+  const getEntityResources = (addresses: string[]) =>
+    ResultAsync.fromPromise(
+      state.getEntityDetailsVaultAggregated(addresses),
+      (e: unknown) => e as Error,
+    ).map((response) => {
+        // response is returned in a different order than the addresses we sent in
+        response.sort((a, b) => addresses.indexOf(a.address) - addresses.indexOf(b.address));
+        return response.map((entityDetails) => entityDetails.fungible_resources.items)
+      }
+    );
+
   return {
+    getEntityResources,
     getEntityOwnerKeys: (address: string) =>
       getEntityDetails([address]).map((response) =>
         response.map(
