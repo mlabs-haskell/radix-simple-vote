@@ -17,10 +17,11 @@ Radix serves as the underlying distributed ledger technology for this project. A
    6. [Radixdlt discord](https://discord.com/invite/radixdlt): For information that may not be explicitly documented, you can often find insights within existing threads or directly inquire in the discord channel. The #scrypto channel is particularly suitable for addressing development-related questions.
 
 The easiest way to interact with the radix network would be to use the provided typescript sdks:
-    - [Radix engine toolkit](https://github.com/radixdlt/typescript-radix-engine-toolkit): This toolkit furnishes essential lower-level functionalities by wrapping the Rust Radix engine compiled to WebAssembly (WASM).
-    - [Gateway SDK](https://github.com/radixdlt/babylon-gateway/tree/main/sdk/typescript): Wraps gateway API endpoints to submit and query the public gateway [Base URL](https://rcnet-v2.radixdlt.com) for the RCnetV2.
-    - [Core API SDK](https://www.npmjs.com/package/@radixdlt/babylon-core-api-sdk): Wrap Core API endpoints for lower level queries directly to a running node. Use the [testnet-node docker compose](https://github.com/radixdlt/babylon-node/tree/main/testnet-node) to run a local node.
-    - [Radix dApp toolkit](https://github.com/radixdlt/radix-dapp-toolkit): Intended for dApp front-ends. Wraps the gateway sdk and the connector browser extension to allow data requests and wallet interaction.
+
+   - [Radix engine toolkit](https://github.com/radixdlt/typescript-radix-engine-toolkit): This toolkit furnishes essential lower-level functionalities by wrapping the Rust Radix engine compiled to WebAssembly (WASM).
+   - [Gateway SDK](https://github.com/radixdlt/babylon-gateway/tree/main/sdk/typescript): Wraps gateway API endpoints to submit and query the public gateway [Base URL](https://rcnet-v2.radixdlt.com) for the RCnetV2.
+   - [Core API SDK](https://www.npmjs.com/package/@radixdlt/babylon-core-api-sdk): Wrap Core API endpoints for lower level queries directly to a running node. Use the [testnet-node docker compose](https://github.com/radixdlt/babylon-node/tree/main/testnet-node) to run a local node.
+   - [Radix dApp toolkit](https://github.com/radixdlt/radix-dapp-toolkit): Intended for dApp front-ends. Wraps the gateway sdk and the connector browser extension to allow data requests and wallet interaction.
 
 
 ### Snapshot Polling

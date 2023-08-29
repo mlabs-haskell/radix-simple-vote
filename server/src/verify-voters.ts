@@ -2,6 +2,8 @@ import { FungibleResourcesCollectionItem } from "@radixdlt/babylon-gateway-api-s
 import { GatewayService } from "./gateway/gateway";
 import { Result, ResultAsync, ok } from "neverthrow";
 
+// checks only existence of voteTokenResource at the relevant address. Does not
+// take into account number of tokens held.
 export const VerifyVoters =
   (gatewayService: GatewayService) =>
   (
