@@ -1,23 +1,15 @@
-# Radix Simple Vote Frontend 
+# Simple Snapshot Poll Frontend 
 
-This is a frontend for interacting with the ["Simple Vote"
-blueprint](https://github.com/radixdlt/community-scrypto-examples/pull/122) on
-RCNet.
-
-## Demo
-
-Follow the setup instructions below to install the wallet and browser extension,
-then go to https://radix-simple-vote.netlify.app/ to try it out!
+Front-end for radix simple snapshot poll concept
 
 ## Setup
 
 Install the wallet and browser extension
 https://docs-babylon.radixdlt.com/main/getting-started-developers/wallet/wallet-and-connecter-installation.html
 
-
 ## Development
 
-Install it and run:
+With NodeJs and NPM installed, run:
 
 ```sh
 npm install
@@ -32,29 +24,24 @@ Follow the setup instructions above, then:
 - The app will show different buttons based on the state of the vote on chain,
   starting with a button to instantiate a new vote component
 
-Note:
+Interface:
+    AppBar buttons:
+        - ROLA: Rola button is used to test the correct functioning of the [ROLA](https://github.com/radixdlt/rola-examples/tree/main) workflow
+        - Connect: Used to connect the dApp, connector extension and the radix preview mobile wallet app
+        - Refresh: Reload polls
+        - ST: Check wether server is up
+    Main:
+        - Use the card on the left to create polls and post the to the back end.
+        - Polls will show as cards on the right hand side. Submit votes by
+pressing the 'yes' | 'no' buttons.
+        - If a poll's closes timestamp has passed, the `Close` button can be used to close the vote, and verify voters
 
-- The vote blueprint is already deployed on RCNet and the package address is
-  hard-coded into the app
-
-## Deploy
+## Build
 
 Build the production site:
 
 ```sh
 npm run build
-```
-
-Deploy a preview with:
-
-```sh
-npx netlify deploy
-```
-
-Deploy to prod with:
-
-```sh
-npx netlify deploy --prod
 ```
 
 ## References

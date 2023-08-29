@@ -181,7 +181,9 @@ export const deriveVirtualAddress = (
   return errAsync(new Error("Could not derive virtual address"));
 };
 
-// creates the signature message that's been signed by the wallet
+// re-creates the signature message that is created by the wallet and signed
+// alongside the challenge
+// see https://github.com/radixdlt/rola-examples/blob/main/README.md#6-7-dapp-backend-verifies-the-proof-using-rola
 export const createSignatureMessage = ({
   challenge,
   dAppDefinitionAddress,

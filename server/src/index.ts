@@ -26,20 +26,13 @@ const verifyVoters = VerifyVoters(gatewayService);
 
 const rola = RolaFactory({
   gatewayService,
-  expectedOrigin: "http://localhost:3000", // TODO: document how to get this and significance
+  expectedOrigin: "http://localhost:3000", // This is the url that the extension sends to the wallet to sign alongside ROLA challenge.
   dAppDefinitionAddress:
-    "account_tdx_d_128656c7vqkww07ytfudjacjh2snf9z8t6slfrz2n7p9kwaz2ewnjyv",
+    "account_tdx_d_128656c7vqkww07ytfudjacjh2snf9z8t6slfrz2n7p9kwaz2ewnjyv", // setup in Manage dApp definition of rcnet-v2-dashboard
   networkId: NetworkId.Ansharnet,
 });
 
 app.get("/status", (_req, res) => res.send({ status: "up" }));
-
-app.get("/ed", (req, res) => {
-  let poll = dbStore.get(DbKeys.Polls).find((x: any) => x.votes.length);
-  const voters = verifyVoters(poll.voteTokenResource, poll.votes).then((x) =>
-    res.send(x),
-  );
-});
 
 app.post("/create-poll", (req, res) => {
   const { orgName, title, description, voteTokenResource, closes } = req.body;
@@ -69,12 +62,12 @@ app.get("/close-poll/:id", async (req, res) => {
   const currentMillis = Date.now();
   const poll = dbStore.get(DbKeys.Polls).find((p: any) => p.id === id);
   if (poll && poll.closes < currentMillis) {
-    poll.closed = true;
     const r = await verifyVoters(poll.voteTokenResource, poll.votes);
     if (r.isErr()) {
       return res.send({ success: false, message: r.error.reason });
     }
-    console.log(r.value);
+    poll.closed = true;
+    // update poll's votes array by keeping only verified votes. Store original unverified votes in unverifiedVotes
     dbStore.set(
       DbKeys.Polls,
       dbStore
@@ -106,7 +99,6 @@ app.get("/create-challenge", (_req, res) => {
 app.post<{}, { success: boolean; message?: string }, SignedChallenge>(
   "/verify-challenge",
   async (req, res) => {
-    const { challenge, proof, address } = req.body;
     const r = await rola(req.body);
     if (r.isErr()) {
       res.send({ success: false, message: r.error.reason });
@@ -125,8 +117,7 @@ app.post<
 >("/vote", async (req, res) => {
   const { pollId, vote, signedChallenge } = req.body;
   const { challenge } = signedChallenge;
-  console.log(req.body);
-  const r = await rola(signedChallenge);
+  const r = await rola(signedChallenge); // verify signed challenge, returns derived address of signer
   if (r.isErr()) {
     res.send({ success: false, message: r.error.reason });
     console.log("error verifying", r);
@@ -138,6 +129,7 @@ app.post<
   if (poll.votes.find((v: any) => v.voter === r.value))
     return res.send({ success: false, message: "Already voted" });
 
+  // push vote to poll
   dbStore.set(
     DbKeys.Polls,
     dbStore.get(DbKeys.Polls).map((p: any) =>

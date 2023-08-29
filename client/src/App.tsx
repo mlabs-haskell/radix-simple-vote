@@ -1,13 +1,12 @@
 import { Button } from "@mui/base";
 import Refresh from "@mui/icons-material/Refresh";
-import { Card, CardActions, CardContent, Fab, Grid, Icon } from "@mui/material";
+import { Fab, Grid } from "@mui/material";
 import AppBar from "@mui/material/AppBar";
 import CssBaseline from "@mui/material/CssBaseline";
-import Divider from "@mui/material/Divider";
 import Toolbar from "@mui/material/Toolbar";
 import { DataRequestBuilder } from "@radixdlt/radix-dapp-toolkit";
 import { fromPromise } from "neverthrow";
-import { Fragment, useState, useEffect, useContext } from "react";
+import {useState, useEffect } from "react";
 import CreatePollFormCard from "./components/CreatePollFormCard";
 import PollList from "./components/PollList";
 import { useApiPolls, useApiStatus, useApiVote } from "./hooks/api";

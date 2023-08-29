@@ -20,35 +20,6 @@ const rdt = RadixDappToolkit({
 
 const apiService = ApiService("http://localhost:4000");
 
-
-// const rdt = RadixDappToolkit(
-//     { dAppDefinitionAddress: dAppId, dAppName: 'Clarity Polls' },
-//     (requestData) => {
-//         requestData({
-//             accounts: { quantifier: 'atLeast', quantity: 1 },
-//         }).map(({ data: { accounts } }) => {
-//             // add accounts to dApp application state
-//             console.log('account data: ', accounts)
-//         })
-//     },
-//     {
-//         networkId: 12, // 12 is for RCnet 01 for Mainnet
-//         onDisconnect: () => {
-//             console.log('Disconnected!')
-// 
-//             // clear your application state
-//         },
-//         onInit: ({ accounts }) => {
-//             // set your initial application state
-//             console.log('onInit accounts: ', accounts)
-//             if (accounts && accounts.length > 0) {
-//                 console.log('Found account')
-//             }
-//         },
-//     }
-// )
-
-
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement)
 root.render(
     <React.StrictMode>
