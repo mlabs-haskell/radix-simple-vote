@@ -1,1 +1,39 @@
-
+CREATE_FUNGIBLE_RESOURCE
+    Enum<OwnerRole::None>()
+    true
+    0u8             # Divisibility (between 0u8 and 18u8)
+    Tuple(
+        Some(         # Mint Roles (if None: defaults to DenyAll, DenyAll)
+            Tuple(
+                Some(Enum<AccessRule::AllowAll>()),                                # Minter (if None: defaults to Owner)
+                Some(Enum<AccessRule::DenyAll>())    # Minter Updater (if None: defaults to Owner)
+            )
+        ),
+        None,        # Burn Roles (if None: defaults to DenyAll, DenyAll)
+        None,        # Freeze Roles (if None: defaults to DenyAll, DenyAll)
+        None,        # Recall Roles (if None: defaults to DenyAll, DenyAll)
+        None,        # Withdraw Roles (if None: defaults to AllowAll, DenyAll)
+        None         # Deposit Roles (if None: defaults to AllowAll, DenyAll)
+    )
+    Tuple(                                                                   # Metadata initialization
+        Map<String, Tuple>(                                                  # Initial metadata values
+            "name" => Tuple(
+                Some(Enum<Metadata::String>("MyResource")),                  # Resource Name
+                true                                                         # Locked
+            )
+        ),
+        Map<String, Enum>(                                                   # Metadata roles
+            "metadata_setter" => Some(Enum<AccessRule::AllowAll>()),         # Metadata setter role
+            "metadata_setter_updater" => None,                               # Metadata setter updater role as None defaults to OWNER
+            "metadata_locker" => Some(Enum<AccessRule::DenyAll>()),          # Metadata locker role
+            "metadata_locker_updater" => None                                # Metadata locker updater role as None defaults to OWNER
+        )
+    )
+    None
+MINT_FUNGIBLE
+    Address("resource_tdx_e_1t43dg9s0ztt9g5rgtcqacy7z6hjn0f6f3pqrx9064w34n83tsdsfmp")
+    Decimal("8");
+CALL_METHOD
+    Address("account_tdx_e_12y9fkl4zt6mq9y4xp7y87nxhluws48a5pfuxpygepwqklt8h23xhyv")
+    "deposit_batch"
+    Expression("ENTIRE_WORKTOP");

@@ -5,7 +5,7 @@ Front-end for radix simple snapshot poll concept
 ## Setup
 
 Install the wallet and browser extension
-https://docs-babylon.radixdlt.com/main/getting-started-developers/wallet/wallet-and-connecter-installation.html
+https://docs-babylon.radixdlt.com/main/getting-started-developers/wallet/wallet-and-connector-installation.html
 
 ## Development
 

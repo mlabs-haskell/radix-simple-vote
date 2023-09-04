@@ -5,6 +5,8 @@ import { ResultAsync } from "neverthrow";
 export const GatewayService = (basePath: string) => {
   const { state, status, transaction, stream } = GatewayApiClient.initialize({
     basePath,
+    applicationName: "snapshot polling",
+    applicationDappDefinitionAddress: 'account_tdx_d_128656c7vqkww07ytfudjacjh2snf9z8t6slfrz2n7p9kwaz2ewnjyv',
   });
 
   const getEntityDetails = (addresses: string[]) =>

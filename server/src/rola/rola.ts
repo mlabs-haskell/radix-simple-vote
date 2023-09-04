@@ -3,7 +3,7 @@ import { Result, ResultAsync, err, errAsync, ok, okAsync } from "neverthrow";
 import { GatewayService } from "../gateway/gateway";
 import { blake2b } from "./crypto/blake2b";
 import { curve25519, secp256k1 } from "./crypto/curves";
-import { ManifestAstValue, PublicKey } from "@radixdlt/radix-engine-toolkit";
+import { PublicKey, RadixEngineToolkit, address } from "@radixdlt/radix-engine-toolkit";
 
 export type RolaError = { reason: string; jsError?: Error };
 
@@ -30,7 +30,6 @@ export const RolaFactory =
 
     const getDerivedAddress = () =>
       deriveVirtualAddress(signedChallenge, networkId)
-        .map(({ value }) => value)
         .mapErr((jsError) => ({
           reason: "couldNotDeriveAddressFromPublicKey",
           jsError,
@@ -121,7 +120,7 @@ export const verifyProofFactory =
 
 const deriveVirtualIdentityAddress = (publicKey: string, networkId: number) =>
   ResultAsync.fromPromise(
-    ManifestAstValue.Address.virtualIdentityAddress(
+    RadixEngineToolkit.Derive.virtualAccountAddressFromPublicKey(
       new PublicKey.Ed25519(publicKey),
       networkId /* The ID of the network to derive the address for. */,
     ),
@@ -133,7 +132,7 @@ const deriveVirtualEddsaEd25519AccountAddress = (
   networkId: number,
 ) =>
   ResultAsync.fromPromise(
-    ManifestAstValue.Address.virtualAccountAddress(
+    RadixEngineToolkit.Derive.virtualAccountAddressFromPublicKey(
       new PublicKey.Ed25519(publicKey),
       networkId /* The ID of the network to derive the address for. */,
     ),
@@ -145,7 +144,7 @@ const deriveVirtualEcdsaSecp256k1AccountAddress = (
   networkId: number,
 ) =>
   ResultAsync.fromPromise(
-    ManifestAstValue.Address.virtualAccountAddress(
+    RadixEngineToolkit.Derive.virtualAccountAddressFromPublicKey(
       new PublicKey.Secp256k1(publicKey),
       networkId /* The ID of the network to derive the address for. */,
     ),

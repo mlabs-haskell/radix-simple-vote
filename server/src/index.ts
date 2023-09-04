@@ -6,7 +6,6 @@ import { RolaFactory } from "./rola/rola";
 import { GatewayService } from "./gateway/gateway";
 import { ChallengeStore } from "./rola/challenge-store";
 import { DbStore, DbKeys } from "./db-store";
-import { UUID } from "@radixdlt/radix-engine-toolkit/dist/models/value/scrypto_sbor";
 import { secureRandom } from "./helpers/crypto";
 import { VerifyVoters } from "./verify-voters";
 
@@ -20,7 +19,7 @@ const dbStore = DbStore("./db.json");
 
 const challengeStore = ChallengeStore(dbStore);
 
-const gatewayService = GatewayService("https://rcnet-v2.radixdlt.com");
+const gatewayService = GatewayService("https://rcnet-v3.radixdlt.com");
 
 const verifyVoters = VerifyVoters(gatewayService);
 
@@ -28,8 +27,8 @@ const rola = RolaFactory({
   gatewayService,
   expectedOrigin: "http://localhost:3000", // This is the url that the extension sends to the wallet to sign alongside ROLA challenge.
   dAppDefinitionAddress:
-    "account_tdx_d_128656c7vqkww07ytfudjacjh2snf9z8t6slfrz2n7p9kwaz2ewnjyv", // setup in Manage dApp definition of rcnet-v2-dashboard
-  networkId: NetworkId.Ansharnet,
+    "account_tdx_d_128656c7vqkww07ytfudjacjh2snf9z8t6slfrz2n7p9kwaz2ewnjyv", // setup in Manage dApp definition of rcnet-v3-dashboard
+  networkId: NetworkId.Zabanet,
 });
 
 app.get("/status", (_req, res) => res.send({ status: "up" }));

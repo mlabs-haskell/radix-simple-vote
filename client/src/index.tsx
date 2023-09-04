@@ -14,7 +14,8 @@ const dAppId =
 
 const rdt = RadixDappToolkit({
   dAppDefinitionAddress: dAppId,
-  networkId: 13,
+  gatewayBaseUrl: 'https://rcnet-v3.radixdlt.com',
+  networkId: 14,
   onDisconnect: () => console.log('Disconnected!'),
 })
 

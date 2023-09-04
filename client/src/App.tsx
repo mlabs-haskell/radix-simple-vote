@@ -85,7 +85,7 @@ const App = () => {
     <CssBaseline>
       <AppBar className="mb-5 w-screen" position="sticky">
         <Toolbar className="w-full max-w-4xl mx-auto" sx={{ p: { sm: 0 } }}>
-          <h1 className="text-3xl font-medium grow">Radix Simple Vote</h1>
+          <h1 className="text-3xl font-medium grow">Snapshot Polling Concept</h1>
           <Button onClick={request} className="m-2 p-2 bg-gray-500 rounded">
             ROLA
           </Button>
