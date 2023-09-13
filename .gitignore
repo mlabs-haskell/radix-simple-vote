@@ -2,3 +2,6 @@
 client/node_modules
 server/node_modules
 
+snapshoter/build
+snapshoter/node_modules
+snapshoter/deploy/container-volumes/*

@@ -1,0 +1,104 @@
+version: '3.8'
+name: testnet-aggregator
+services:
+  # Based on https://github.com/radixdlt/babylon-node/blob/552474f3cad771574c0bec91d1cfc7e998c22411/testnet-node/docker-compose.yml
+  testnet-node:
+    image: radixdlt/babylon-node:rcnet-v3.1-r1
+    profiles: ["node"]
+    init: true
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+      memlock: -1
+    restart: unless-stopped
+    mem_limit: 12000m
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "127.0.0.1:3333:3333"   # Core API - binds to localhost:3333
+      - "127.0.0.1:3334:3334"   # System API - binds to localhost:3334
+      - "127.0.0.1:3335:3335"   # Prometheus API - binds to localhost:3335
+      - "127.0.0.1:9011:9011"   # JMX Port for Java debugging - binds to localhost:9001
+      - "127.0.0.1:50505:50505" # JDWP Port for Java debugging - binds to localhost:50505
+      - "127.0.0.1:30000:30000" # Gossip port - binds to localhost:30000
+    environment:
+      JAVA_OPTS: "${JAVA_OPTS}"
+      RADIXDLT_LOG_LEVEL: "${RADIXDLT_LOG_LEVEL}"
+      RADIXDLT_VALIDATOR_KEY_LOCATION: "${RADIXDLT_VALIDATOR_KEY_LOCATION}"
+      RADIXDLT_NODE_KEY_CREATE_IF_MISSING: "${RADIXDLT_NODE_KEY_CREATE_IF_MISSING}"
+      RADIXDLT_DB_ACCOUNT_CHANGE_INDEX_ENABLE: "${RADIXDLT_DB_ACCOUNT_CHANGE_INDEX_ENABLE}"
+      RADIX_NODE_KEYSTORE_PASSWORD: "${RADIX_NODE_KEYSTORE_PASSWORD}"
+      RADIXDLT_NETWORK_ID: "${RADIXDLT_NETWORK_ID}"
+      RADIXDLT_NETWORK_SEEDS_REMOTE: "${RADIXDLT_NETWORK_SEEDS_REMOTE}"
+      RADIXDLT_GENESIS_DATA: "${RADIXDLT_GENESIS_DATA}"
+    volumes:
+      -  "./container-volumes/node/ledger:/home/radixdlt/RADIXDB"
+      -  "./container-volumes/node/key:/home/radixdlt/key"
+      -  "./container-volumes/node/logs:/home/radixdlt/logs"
+
+  postgres_db:
+    # Based on https://github.com/radixdlt/babylon-gateway/blob/0dbe2c10a6460b17ce85bd97374017d23d4eeab8/deployment/docker-compose.yml#L28
+    # See https://hub.docker.com/_/postgres for details about configuration
+    image: "postgres:15.2-alpine"
+    shm_size: 256m
+    profiles: ["database", "aggregation"]
+    ports:
+      - "127.0.0.1:5432:5432"
+    # The default shutdown mode for this container is SIGINT:
+    # https://github.com/docker-library/postgres/blob/e483778176ca34bcbe83ee17000820d4f6e64c28/12/alpine/Dockerfile
+    # This enables fast Shutdown mode - see eg https://www.postgresql.org/docs/10/server-shutdown.html
+    stop_grace_period: 90s # Ensure the DB is allowed time to stop to prevent needing to recover on next start-up
+    deploy:
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - ./container-volumes/postgresdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: "${POSTGRES_SUPERUSER}"
+      POSTGRES_PASSWORD: "${POSTGRES_SUPERUSER_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_DB_NAME}"
+    healthcheck:
+      test: pg_isready -U ${POSTGRES_SUPERUSER} -d ${POSTGRES_DB_NAME}
+      interval: 10s
+      timeout: 3s
+      retries: 3
+  
+  database_migrations: 
+    # Based on https://github.com/radixdlt/babylon-gateway/blob/0dbe2c10a6460b17ce85bd97374017d23d4eeab8/deployment/docker-compose.yml#L163
+    image: "radixdlt/babylon-ng-database-migrations:rcnet-v3.1"
+    profiles: ["aggregation"]
+    environment:
+      ConnectionStrings__NetworkGatewayMigrations: "Host=postgres_db:5432;Database=${POSTGRES_DB_NAME};Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERUSER_PASSWORD}"
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+
+  data_aggregator: # This is the base -- the _image and _built containers are defined below
+    image: "radixdlt/babylon-ng-data-aggregator:rcnet-v3.1"
+    profiles: ["aggregation"]
+    deploy:
+      restart_policy:
+        condition: on-failure
+    ports:
+      - "127.0.0.1:5207:80" # This allows you to connect to the API (for root and health checks) at http://localhost:5207
+      - "127.0.0.1:1234:1234" # This allows you to connect to the metrics API at http://localhost:1234
+    environment:
+      # WIPE_DATABASE: "true"
+      ASPNETCORE_URLS: "http://*:80" # Binds to 80 on all interfaces
+      CustomJsonConfigurationFilePath: "/home/radixdlt/network-gateway/config.json"
+      PrometheusMetricsPort: "1234"
+      ConnectionStrings__NetworkGatewayReadWrite: "Host=postgres_db:5432;Database=${POSTGRES_DB_NAME};Username=${POSTGRES_SUPERUSER};Password=${POSTGRES_SUPERUSER_PASSWORD}"
+      DataAggregator__Network__NetworkName: "${NETWORK_NAME}"
+      DataAggregator__Network__DisableCoreApiHttpsCertificateChecks: "${DISABLE_CORE_API_CERTIFICATE_CHECKS}"
+      DataAggregator__Network__CoreApiNodes__0__Name: "${NODE_0_NAME}"
+      DataAggregator__Network__CoreApiNodes__0__CoreApiAddress: "${NODE_0_CORE_API_ADDRESS}"
+      DataAggregator__Network__CoreApiNodes__0__CoreApiAuthorizationHeader: "${NODE_0_CORE_API_AUTHORIZATION_HEADER}"
+      DataAggregator__Network__CoreApiNodes__0__TrustWeighting: "1"
+      DataAggregator__Network__CoreApiNodes__0__Enabled: "${NODE_0_ENABLED}"
+    volumes:
+      - ./data-aggregator-fixed-configuration.json:/home/radixdlt/network-gateway/config.json
+    depends_on:
+      database_migrations:
+        condition: service_completed_successfully
+

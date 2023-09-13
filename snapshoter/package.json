@@ -1,0 +1,11 @@
+{
+  "devDependencies": {
+    "typescript": "^5.2.2"
+  },
+  "scripts": {
+    "start": "npx tsc && node ./build/index.js"
+  },
+  "dependencies": {
+    "postgres": "^3.3.5"
+  }
+}
