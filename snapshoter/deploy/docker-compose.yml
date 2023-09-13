@@ -65,7 +65,7 @@ services:
       retries: 3
   
   database_migrations: 
-    # Based on https://github.com/radixdlt/babylon-gateway/blob/0dbe2c10a6460b17ce85bd97374017d23d4eeab8/deployment/docker-compose.yml#L163
+    # Based on https://github.com/radixdlt/babylon-gateway/blob/0dbe2c10a6460b17ce85bd97374017d23d4eeab8/deployment/docker-compose.yml#L154
     image: "radixdlt/babylon-ng-database-migrations:rcnet-v3.1"
     profiles: ["aggregation"]
     environment:
@@ -74,7 +74,8 @@ services:
       postgres_db:
         condition: service_healthy
 
-  data_aggregator: # This is the base -- the _image and _built containers are defined below
+  data_aggregator:
+     # Based on https://github.com/radixdlt/babylon-gateway/blob/0dbe2c10a6460b17ce85bd97374017d23d4eeab8/deployment/docker-compose.yml#L163
     image: "radixdlt/babylon-ng-data-aggregator:rcnet-v3.1"
     profiles: ["aggregation"]
     deploy:
