@@ -30,3 +30,11 @@ docker compose --profile aggregation up
 ```
 
 It will first start Postgres database, then run container that will perform required DB initialization, and if everything went OK, it will start aggregator container.
+
+### Running DB only
+
+To run only DB (e.g. for debugging):
+
+```shell
+docker compose --profile database up
+```
