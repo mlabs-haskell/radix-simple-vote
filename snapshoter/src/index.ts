@@ -1,5 +1,6 @@
 import openConnection from "./db";
 import { initDbSnapshots } from "./db_snapshotter"
+import { spam } from "./spammer";
 import { XRD_ADDRS } from "./test_addresses";
 
 // These are Misha's test accounts atm
@@ -22,8 +23,8 @@ async function testDb1() {
   const snapshots = initDbSnapshots(connection);
   for (const v of KNOWN_VERSIONS) {
     console.log("State version:", v);
-    const snapshotV1 = await (await snapshots.makeSnapshotV1(TOKENS.SG4, v))._unsafeUnwrap();
-    const snapshotV2 = await (await snapshots.makeSnapshotV2(TOKENS.SG4, v, TEST_ACCOUNTS))._unsafeUnwrap();
+    const snapshotV1 = (await snapshots.makeSnapshotV1(TOKENS.SG4, v))._unsafeUnwrap();
+    const snapshotV2 = (await snapshots.makeSnapshotV2(TOKENS.SG4, v, TEST_ACCOUNTS))._unsafeUnwrap();
     console.log("V1 snapshot size: ", snapshotV1.size())
     console.log("V2 snapshot size: ", snapshotV2.size())
     TEST_ACCOUNTS.forEach((addr) => {
@@ -54,12 +55,12 @@ async function testDb2() {
   const token = TOKENS.XRD;
 
   var startTime = performance.now();
-  const snapshotV1 = await (await snapshots.makeSnapshotV1(token, v))._unsafeUnwrap();
+  const snapshotV1 = (await snapshots.makeSnapshotV1(token, v))._unsafeUnwrap();
   var endTime = performance.now();
   console.log(`V1 time: ${endTime - startTime}`);
 
   var startTime = performance.now();
-  const snapshotV2 = await (await snapshots.makeSnapshotV2(token, v, XRD_ADDRS))._unsafeUnwrap();
+  const snapshotV2 = (await snapshots.makeSnapshotV2(token, v, XRD_ADDRS))._unsafeUnwrap();
   var endTime = performance.now();
   console.log(`V2 time: ${endTime - startTime}`);
 
@@ -72,12 +73,13 @@ async function testDb2() {
   connection.end()
 }
 
-
-async function runTest() {
-  console.log("----- testDb1-----")
+async function runTests() {
+  console.log("----- testDb1 -----")
   await testDb1();
-  console.log("\n----- testDb2-----")
+  console.log("\n----- testDb2 -----")
   await testDb2();
+  console.log("\n----- spam DB -----")
+  spam(10000, 1)
 }
 
-runTest()
+runTests()
