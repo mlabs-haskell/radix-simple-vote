@@ -1,6 +1,6 @@
 import postgres from 'postgres'
 
-export type DbConnection = ReturnType<typeof openConnection>;
+export type Db = ReturnType<typeof openConnection>;
 
 const openConnection = () => postgres({
   database: "radixdlt_ledger",

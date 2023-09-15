@@ -1,4 +1,4 @@
-import { ResultAsync } from "neverthrow";
+import { Err, ResultAsync } from "neverthrow";
 
 export type TokenAddress = string;
 export type OwnerAddress = string;
@@ -12,25 +12,31 @@ export interface BalanceInfo {
 }
 
 export class Snapshot {
-  private accountsInfo: Map<OwnerAddress, BalanceInfo>
+  readonly stateVersion: number;
+  private accountsInfo: Map<OwnerAddress, BalanceInfo>;
 
-  // private constructor(map: Map<OwnerAddress, BalanceInfo>) {
-  //   this.accountsInfo = map;
-  // }
-
-  private constructor() {
+  private constructor(stateVersion: number) {
+    this.stateVersion = stateVersion;
     this.accountsInfo = new Map();
   }
 
-  addBalance(balance: BalanceInfo): this {
-    this.accountsInfo.set(balance.ownerAddress, balance)
-    return this
+  size(): number {
+    return this.accountsInfo.size
   }
 
-  static fromBalances(balances: BalanceInfo[]): Snapshot {
+  addBalance(balance: BalanceInfo): this {
+    if (balance.fromStateVersion > this.stateVersion) {
+      throw new Error(`Balance info has higher state version than snapshot: ${balance.fromStateVersion} vs. ${this.stateVersion}.
+      Something went very wrong.`);
+    }
+    this.accountsInfo.set(balance.ownerAddress, balance);
+    return this;
+  }
+
+  static fromBalances(stateVersion: number, balances: BalanceInfo[]): Snapshot {
     return balances.reduce(
       (s, balanceInfo) => s.addBalance(balanceInfo),
-      new Snapshot()
+      new Snapshot(stateVersion)
     );
   }
 
@@ -44,7 +50,10 @@ export class Snapshot {
 
 export interface Snapshots {
 
-  makeSnapshot(tokenAddress: string, stateVersion: number): ResultAsync<Snapshot, Error>
+  makeSnapshotV1(tokenAddress: string, stateVersion: number): ResultAsync<Snapshot, Error>
+
+  /// Accepts list of addresses
+  makeSnapshotV2(tokenAddress: string, stateVersion: number, owners: OwnerAddress[]): ResultAsync<Snapshot, Error>
 
 }
 
